@@ -1,0 +1,99 @@
+# ===============================
+# 📦 Import Required Libraries
+# ===============================
+import numpy as np
+import pandas as pd
+import re
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.ensemble import RandomForestClassifier  # Stronger model
+from sklearn.metrics import accuracy_score, classification_report
+from google.colab import files
+
+# ===============================
+# 📁 Upload and Load the Dataset
+# ===============================
+print("📤 Upload your 'mail_data.csv' file")
+uploaded = files.upload()
+
+# Load dataset
+raw_mail_data = pd.read_csv('mail_data.csv')
+mail_data = raw_mail_data.where(pd.notnull(raw_mail_data), '')
+
+# ===============================
+# 🧼 Text Cleaning Function
+# ===============================
+def clean_text(text):
+    # Keep alphanumeric characters, remove special symbols and extra spaces
+    text = re.sub(r'[^a-zA-Z0-9\s]', '', str(text))  # Keep numbers and letters
+    text = text.lower()  # Convert to lowercase
+    text = re.sub(r'\s+', ' ', text).strip()  # Remove extra spaces
+    return text
+
+# Clean the message column
+mail_data['Message'] = mail_data['Message'].apply(clean_text)
+
+# ===============================
+# 🧹 Label Encoding
+# ===============================
+# Convert spam/ham to 0/1
+mail_data.loc[mail_data['Category'] == 'spam', 'Category'] = 0
+mail_data.loc[mail_data['Category'] == 'ham', 'Category'] = 1
+
+X = mail_data['Message']
+Y = mail_data['Category'].astype('int')
+
+# ===============================
+# 🔀 Train-Test Split
+# ===============================
+X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.2, random_state=3)
+
+# ===============================
+# ✨ TF-IDF Vectorizer with n-grams
+# ===============================
+vectorizer = TfidfVectorizer(
+    min_df=1,  # Keep all words that appear at least once
+    stop_words='english',  # Remove common stop words
+    lowercase=True,  # Convert all text to lowercase
+    ngram_range=(1, 2)  # Use unigrams and bigrams
+)
+
+X_train_features = vectorizer.fit_transform(X_train)
+X_test_features = vectorizer.transform(X_test)
+
+# ===============================
+# 🤖 Train a Stronger Model
+# ===============================
+model = RandomForestClassifier(n_estimators=100, random_state=42, class_weight='balanced')
+model.fit(X_train_features, Y_train)
+
+# ===============================
+# ✅ Evaluation
+# ===============================
+Y_train_pred = model.predict(X_train_features)
+Y_test_pred = model.predict(X_test_features)
+
+print("✅ Training Accuracy:", round(accuracy_score(Y_train, Y_train_pred) * 100, 2), "%")
+print("✅ Test Accuracy    :", round(accuracy_score(Y_test, Y_test_pred) * 100, 2), "%")
+print("\n📊 Classification Report:\n", classification_report(Y_test, Y_test_pred, target_names=["Spam", "Ham"]))
+
+# ===============================
+# 🧪 Test With Custom Message
+# ===============================
+def classify_mail(mail_text):
+    cleaned = clean_text(mail_text)
+    input_data = vectorizer.transform([cleaned])  # Transform input using TF-IDF
+    prediction = model.predict(input_data)  # Predict class
+    probability = model.predict_proba(input_data)  # Get prediction probability
+
+    print("\n📨 Input Message:", mail_text)
+    if prediction[0] == 1:
+        print("🔹 Result: ✅ HAM (Not Spam)")
+    else:
+        print("🔸 Result: 🚫 SPAM Message")
+
+    print("📊 Confidence (Ham, Spam):", np.round(probability[0], 3))
+
+# Try it with your own input
+test_message = input("\n🔍 Enter an email message to classify:\n")
+classify_mail(test_message)
